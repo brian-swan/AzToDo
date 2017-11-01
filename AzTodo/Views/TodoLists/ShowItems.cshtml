@@ -1,0 +1,34 @@
+﻿@model IEnumerable<AzTodo.Models.ListItem>
+
+@{
+    ViewData["Title"] = "Show";
+}
+
+<h2>List: @ViewBag.ListName</h2>
+
+<p>
+    <a asp-controller="ListItems" asp-action="Create" asp-route-listId="@ViewBag.ListId">Add Item</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+                <th>
+                    ToDo Item Description
+                </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var item in Model) {
+        <tr>
+            <td>
+                @Html.DisplayFor(modelItem => item.ItemDescription)
+            </td>
+            <td>
+                <a asp-controller="ListItems" asp-action="Edit" asp-route-id="@item.ItemId">Edit</a> |
+                <a asp-controller="ListItems" asp-action="Delete" asp-route-id="@item.ItemId">Delete</a>
+            </td>
+        </tr>
+}
+    </tbody>
+</table>

@@ -1,0 +1,12 @@
+C:\Users\bswan\source\repos\AzTodo\AzTodo\obj\Debug\netcoreapp2.0\AzTodo.csprojResolveAssemblyReference.cache
+C:\Users\bswan\source\repos\AzTodo\AzTodo\obj\Debug\netcoreapp2.0\AzTodo.csproj.CoreCompileInputs.cache
+C:\Users\bswan\source\repos\AzTodo\AzTodo\obj\Debug\netcoreapp2.0\UserSecretsAssemblyInfo.cs
+C:\Users\bswan\source\repos\AzTodo\AzTodo\obj\Debug\netcoreapp2.0\AzTodo.AssemblyInfoInputs.cache
+C:\Users\bswan\source\repos\AzTodo\AzTodo\obj\Debug\netcoreapp2.0\AzTodo.AssemblyInfo.cs
+C:\Users\bswan\source\repos\AzTodo\AzTodo\bin\Debug\netcoreapp2.0\AzTodo.deps.json
+C:\Users\bswan\source\repos\AzTodo\AzTodo\bin\Debug\netcoreapp2.0\AzTodo.runtimeconfig.json
+C:\Users\bswan\source\repos\AzTodo\AzTodo\bin\Debug\netcoreapp2.0\AzTodo.runtimeconfig.dev.json
+C:\Users\bswan\source\repos\AzTodo\AzTodo\bin\Debug\netcoreapp2.0\AzTodo.dll
+C:\Users\bswan\source\repos\AzTodo\AzTodo\bin\Debug\netcoreapp2.0\AzTodo.pdb
+C:\Users\bswan\source\repos\AzTodo\AzTodo\obj\Debug\netcoreapp2.0\AzTodo.dll
+C:\Users\bswan\source\repos\AzTodo\AzTodo\obj\Debug\netcoreapp2.0\AzTodo.pdb
