@@ -1,0 +1,382 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"adminUsername": {
+			"type": "string",
+			"defaultValue": "aztodouser",
+			"metadata": {
+				"description": "Admin username for VM"
+			}
+		},
+		"adminPassword": {
+			"type": "securestring",
+			"metadata": {
+				"description": "Admin password for VMs"
+			}
+		},
+		"serverCount": {
+			"type": "int",
+			"defaultValue": 1,
+			"metadata": {
+				"description": "Number of web servers"
+			}
+		},
+		"dbServerEndpoint": {
+			"type": "string",
+			"metadata": {
+				"description": "The IP or DNS name of the DB server"
+			}
+		},
+		"sqlLogin": {
+			"type": "string",
+			"defaultValue": "aztodosqluser",
+			"metadata": {
+				"description": "SQl login (username) for database"
+			}
+		},
+		"sqlPwd": {
+			"type": "securestring",
+			"metadata": {
+				"description": "Password for database"
+			}
+		}
+	},
+	"variables": {
+		"storageAccountPrefix": "[concat(uniqueString(resourceGroup().id), 'sa')]",
+		"vnetName": "aztododb-VNET",
+		"subnetName": "aztododb-SUBNET",
+		"avsetName": "aztodo-AVSET",
+		"publicIpNamePrefix": "aztodo-PUBLICIP-",
+		"nsgName": "aztodo-NSG",
+		"vnetId": "[resourceId(resourceGroup().name,'Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+		"subnetRef": "[concat(variables('vnetId'), '/subnets/', variables('subnetName'))]",
+		"lbName": "aztodo-LB",
+		"lbPublicIpName": "aztodo-LB-IP",
+		"lbId": "[resourceId('Microsoft.Network/loadBalancers',variables('lbName'))]",
+		"frontEndIpConfigId": "[concat(variables('lbId'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
+		"lbPoolId": "[concat(variables('lbId'),'/backendAddressPools/BackendPool1')]",
+		"lbProbeId": "[concat(variables('lbId'),'/probes/tcpProbe')]"
+	},
+	"resources": [
+		{
+			"apiVersion": "2016-01-01",
+			"type": "Microsoft.Storage/storageAccounts",
+			"name": "[concat(variables('storageAccountPrefix'), copyIndex())]",
+			"location": "[resourceGroup().location]",
+			"sku": {
+				"name": "Standard_LRS"
+			},
+			"kind": "Storage",
+			"properties": {},
+			"copy": {
+				"name": "storagecopy",
+				"count": "[parameters('serverCount')]"
+			}
+		},
+		{
+			"apiVersion": "2015-06-15",
+			"type": "Microsoft.Network/virtualNetworks",
+			"name": "[variables('vnetName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"addressSpace": {
+					"addressPrefixes": [
+						"10.0.0.0/16"
+					]
+				},
+				"subnets": [
+					{
+						"name": "[variables('subnetName')]",
+						"properties": {
+							"addressPrefix": "10.0.0.0/24"
+						}
+					}
+				]
+			}
+		},
+		{
+			"name": "[variables('avsetName')]",
+			"type": "Microsoft.Compute/availabilitySets",
+			"apiVersion": "2016-03-30",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"platformFaultDomainCount": "1",
+				"platformUpdateDomainCount": "1"
+			}
+		},
+		{
+			"name": "[concat(variables('publicIpNamePrefix'), copyIndex())]",
+			"type": "Microsoft.Network/publicIpAddresses",
+			"apiVersion": "2015-06-15",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"publicIpAllocationMethod": "Dynamic"
+			},
+			"copy": {
+				"name": "publicIpNamecopy",
+				"count": "[parameters('serverCount')]"
+			}
+		},
+		{
+			"name": "[variables('nsgName')]",
+			"type": "Microsoft.Network/networkSecurityGroups",
+			"apiVersion": "2015-06-15",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"securityRules": [
+					{
+						"name": "default-allow-rdp",
+						"properties": {
+							"priority": 1000,
+							"sourceAddressPrefix": "*",
+							"protocol": "Tcp",
+							"destinationPortRange": "3389",
+							"access": "Allow",
+							"direction": "Inbound",
+							"sourcePortRange": "*",
+							"destinationAddressPrefix": "*"
+						}
+					},
+					{
+						"name": "web-rule",
+						"properties": {
+							"description": "Allow WEB",
+							"protocol": "Tcp",
+							"sourcePortRange": "*",
+							"destinationPortRange": "80",
+							"sourceAddressPrefix": "Internet",
+							"destinationAddressPrefix": "*",
+							"access": "Allow",
+							"priority": 101,
+							"direction": "Inbound"
+						}
+					},
+					{
+						"name": "ssl-rule",
+						"properties": {
+							"description": "Allow SSL",
+							"protocol": "Tcp",
+							"sourcePortRange": "*",
+							"destinationPortRange": "443",
+							"sourceAddressPrefix": "Internet",
+							"destinationAddressPrefix": "*",
+							"access": "Allow",
+							"priority": 110,
+							"direction": "Inbound"
+						}
+					}
+				]
+			}
+		},
+		{
+			"name": "[concat('aztodo-NIC-', copyIndex())]",
+			"type": "Microsoft.Network/networkInterfaces",
+			"apiVersion": "2015-06-15",
+			"location": "[resourceGroup().location]",
+			"dependsOn": [
+				"[concat('Microsoft.Network/virtualNetworks/', variables('vnetName'))]",
+				"publicIpNamecopy",
+				"[concat('Microsoft.Network/networkSecurityGroups/', variables('nsgName'))]",
+				"[concat('Microsoft.Network/loadBalancers/', variables('lbName'))]"
+			],
+			"copy": {
+				"name": "niccopy",
+				"count": "[parameters('serverCount')]"
+			},
+			"properties": {
+				"ipConfigurations": [
+					{
+						"name": "[concat('ipconfig', copyIndex())]",
+						"properties": {
+							"subnet": {
+								"id": "[variables('subnetRef')]"
+							},
+							"privateIPAllocationMethod": "Dynamic",
+							"publicIpAddress": {
+								"id": "[resourceId(resourceGroup().name,'Microsoft.Network/publicIpAddresses', concat(variables('publicIpNamePrefix'), copyIndex()))]"
+							},
+							"loadBalancerBackendAddressPools": [
+								{
+									"id": "[concat(variables('lbID'), '/backendAddressPools/BackendPool1')]"
+								}
+							]
+						}
+					}
+				],
+				"networkSecurityGroup": {
+					"id": "[resourceId(resourceGroup().name, 'Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+				}
+			}
+		},
+		{
+			"name": "[concat('aztodoWebsrv', copyIndex())]",
+			"type": "Microsoft.Compute/virtualMachines",
+			"apiVersion": "2016-03-30",
+			"location": "[resourceGroup().location]",
+			"dependsOn": [
+				"niccopy",
+				"[concat('Microsoft.Compute/availabilitySets/', variables('avsetName'))]",
+				"storagecopy"
+			],
+			"copy": {
+				"name": "vmcopy",
+				"count": "[parameters('serverCount')]"
+			},
+			"properties": {
+				"osProfile": {
+					"computerName": "[concat('aztodoWebsrv', copyIndex())]",
+					"adminUsername": "[parameters('adminUsername')]",
+					"adminPassword": "[parameters('adminPassword')]",
+					"windowsConfiguration": {
+						"provisionVmAgent": "true"
+					}
+				},
+				"hardwareProfile": {
+					"vmSize": "Standard_D3_v2"
+				},
+				"storageProfile": {
+					"imageReference": {
+						"publisher": "MicrosoftWindowsServer",
+						"offer": "WindowsServer",
+						"sku": "2016-Datacenter",
+						"version": "latest"
+					},
+					"osDisk": {
+						"createOption": "FromImage",
+						"vhd": {
+							"uri": "[concat(concat(reference(resourceId(resourceGroup().name, 'Microsoft.Storage/storageAccounts', concat(variables('storageAccountPrefix'), copyIndex())), '2015-06-15').primaryEndpoints['blob'], 'vhds/'), concat('aztodoWebsrv', copyIndex()), uniqueString(resourceGroup().id), '.vhd')]"
+						},
+						"name": "[concat('aztodoWebsrv', copyIndex())]"
+					},
+					"dataDisks": []
+				},
+				"networkProfile": {
+					"networkInterfaces": [
+						{
+							"id": "[resourceId('Microsoft.Network/networkInterfaces', concat('aztodo-NIC-', copyIndex()))]"
+						}
+					]
+				},
+				"availabilitySet": {
+					"id": "[resourceId('Microsoft.Compute/availabilitySets', variables('avsetName'))]"
+				}
+			},
+			"resources": [
+				{
+					"type": "extensions",
+					"name": "ConfigureIISAndDeployAzTodo",
+					"apiVersion": "2015-06-15",
+					"location": "[resourceGroup().location]",
+					"dependsOn": [
+						"[concat('aztodoWebsrv', copyIndex())]"
+					],
+					"properties": {
+						"publisher": "Microsoft.Compute",
+						"type": "CustomScriptExtension",
+						"typeHandlerVersion": "1.8",
+						"autoUpgradeMinorVersion": true,
+						"settings": {
+							"fileUris": [
+								"https://azurestackbetastorage.blob.core.windows.net/aztodo/ConfigureWebSrvAndDeployAzTodo.ps1"
+							],
+							"commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -file ', 'ConfigureWebSrvAndDeployAzTodo.ps1', ' -ServerEndpoint ', parameters('DbServerEndpoint'), ' -SqlUserName ', parameters('sqlLogin'),' -SqlPwd ', parameters('sqlPwd'))]"
+						}
+					}
+				}
+			]
+		},
+		{
+			"apiVersion": "2015-06-15",
+			"name": "[variables('lbName')]",
+			"type": "Microsoft.Network/loadBalancers",
+			"location": "[resourceGroup().location]",
+			"dependsOn": [
+				"[concat('Microsoft.Network/publicIPAddresses/', variables('lbPublicIpName'))]"
+			],
+			"properties": {
+				"frontendIPConfigurations": [
+					{
+						"name": "LoadBalancerFrontEnd",
+						"properties": {
+							"publicIPAddress": {
+								"id": "[resourceId(resourceGroup().name, 'Microsoft.Network/publicIPAddresses', variables('lbPublicIpName'))]"
+							}
+						}
+					}
+				],
+				"backendAddressPools": [
+					{
+						"name": "BackendPool1"
+					}
+				],
+				"loadBalancingRules": [
+					{
+						"name": "LBRule1",
+						"properties": {
+							"frontendIPConfiguration": {
+								"id": "[variables('frontEndIpConfigId')]"
+							},
+							"backendAddressPool": {
+								"id": "[variables('lbPoolId')]"
+							},
+							"protocol": "Tcp",
+							"frontendPort": 443,
+							"backendPort": 443,
+							"enableFloatingIP": false,
+							"idleTimeoutInMinutes": 5,
+							"probe": {
+								"id": "[variables('lbProbeId')]"
+							},
+							"loadDistribution": "Default"
+						}
+					},
+					{
+						"name": "LBRule2",
+						"properties": {
+							"frontendIPConfiguration": {
+								"id": "[variables('frontEndIpConfigId')]"
+							},
+							"backendAddressPool": {
+								"id": "[variables('lbPoolId')]"
+							},
+							"protocol": "Tcp",
+							"frontendPort": 80,
+							"backendPort": 80,
+							"enableFloatingIP": false,
+							"idleTimeoutInMinutes": 5,
+							"probe": {
+								"id": "[variables('lbProbeId')]"
+							},
+							"loadDistribution": "Default"
+						}
+					}
+				],
+				"probes": [
+					{
+						"name": "tcpProbe",
+						"properties": {
+							"protocol": "Tcp",
+							"port": 80,
+							"intervalInSeconds": 5,
+							"numberOfProbes": 2
+						}
+					}
+				]
+			}
+		},
+		{
+			"apiVersion": "2015-06-15",
+			"type": "Microsoft.Network/publicIPAddresses",
+			"name": "[variables('lbPublicIpName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"publicIPAllocationMethod": "Dynamic",
+				"dnsSettings": {
+					"domainNameLabel": "[concat('aztodo-', resourceGroup().location, '-', uniquestring(resourceGroup().id))]"
+				}
+			}
+		}
+	],
+	"outputs": {}
+}
